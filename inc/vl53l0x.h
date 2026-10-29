@@ -32,6 +32,14 @@ typedef struct {
    uint32_t  presupuestoUs;  /* measurement timing budget */
    uint8_t   ok;             /* 1 si el init termino bien */
    uint8_t   timeout;        /* 1 si la ultima operacion dio timeout */
+   uint16_t  oscCal;         /* OSC_CALIBRATE_VAL leido al arrancar el modo continuo */
+   /* Modo por interrupcion (los completa vl53l0xHabilitarIrq) */
+   uint8_t   usaIrq;
+   uint8_t   canalIrq;
+   gpioMap_t pinInt;
+   volatile uint8_t  listo;     /* la ISR avisa que hay medicion nueva */
+   volatile uint32_t tAviso;    /* instante del aviso (ciclos, ver tiempo.h) */
+   volatile uint32_t perdidas;  /* avisos que llegaron antes de leer el anterior */
 } vl53l0x_t;
 
 /* Comprueba que en 'dir' responda un VL53L0X (registro 0xC0 = 0xEE) */
@@ -59,8 +67,19 @@ uint8_t  vl53l0xPresupuesto(vl53l0x_t *dev, uint32_t us);
 void     vl53l0xContinuo(vl53l0x_t *dev, uint32_t periodoMs);
 void     vl53l0xDetener(vl53l0x_t *dev);
 
-/* No bloqueante: 1 si habia medicion nueva (y la deja en *mm) */
+/* No bloqueante: 1 si habia medicion nueva (y la deja en *mm).
+ * Sin interrupcion pregunta por I2C; con interrupcion solo va al I2C cuando
+ * el sensor avisa por su pin G (GPIO1). */
 uint8_t  vl53l0xLeer(vl53l0x_t *dev, uint16_t *mm);
+
+/* Modo por interrupcion: el pin G (GPIO1) del sensor baja cuando termina una
+ * medicion y vuelve a subir cuando se la lee. Entra por 'pin' (= GPIOpuerto[bit])
+ * al canal de interrupcion 'canal' (flanco de bajada, con pull-up interno).
+ * La ISR solo guarda el instante y levanta un aviso; vl53l0xLeer() hace el I2C.
+ * Llamar despues de vl53l0xInit. Antes de que 'dev' deje de existir, llamar a
+ * vl53l0xDeshabilitarIrq: la ISR guarda un puntero a 'dev'. */
+void     vl53l0xHabilitarIrq(vl53l0x_t *dev, gpioMap_t pin, uint8_t puerto, uint8_t bit, uint8_t canal);
+void     vl53l0xDeshabilitarIrq(vl53l0x_t *dev);
 
 /* Bloqueante (hasta ~presupuesto): una medicion suelta */
 uint16_t vl53l0xMedirUnaVez(vl53l0x_t *dev);

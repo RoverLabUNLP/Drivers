@@ -72,8 +72,14 @@ static const uint8_t   dirsTof[3] = { 0x30, 0x31, 0x32 };
 
 void testTof(void)
 {
+   static const gpioMap_t pinesInt[3]  = { PIN_TOF1_INT, PIN_TOF2_INT, PIN_TOF3_INT };
+   static const uint8_t   puertosInt[3] = { TOF1_INT_PUERTO, TOF2_INT_PUERTO, TOF3_INT_PUERTO };
+   static const uint8_t   bitsInt[3]    = { TOF1_INT_BIT, TOF2_INT_BIT, TOF3_INT_BIT };
+   static const uint8_t   canalesInt[3] = { IRQ_CANAL_TOF1, IRQ_CANAL_TOF2, IRQ_CANAL_TOF3 };
+
    vl53l0x_t tof[3];
    uint16_t  ultimo[3] = { 0, 0, 0 };
+   uint32_t  cuenta[3] = { 0, 0, 0 };
    uint8_t   n;
 
    imprimir("\r\n--- VL53L0X ---\r\n"
@@ -85,7 +91,7 @@ void testTof(void)
    if (pedidoSalir(c)) return;
    imprimir("%c\r\n", c);
 
-   i2cInit(BUS_I2C, 100000);
+   i2cInit(BUS_I2C, I2C_VELOCIDAD);
 
    if (c == '1') {
       n = 1;
@@ -93,6 +99,8 @@ void testTof(void)
       static const uint8_t candidatas[] = { 0x29, 0x30, 0x31, 0x32 };
       tof[0].dir = 0;
       tof[0].xshut = VL53L0X_SIN_XSHUT;
+      tof[0].ok = 0;
+      tof[0].usaIrq = 0;
       for (uint32_t i = 0; i < sizeof(candidatas); i++) {
          if (vl53l0xPresente(candidatas[i])) { tof[0].dir = candidatas[i]; break; }
       }
@@ -113,18 +121,37 @@ void testTof(void)
       imprimir("%d de 3 listos\r\n", ok);
    }
 
-   for (uint8_t i = 0; i < n; i++)
-      if (tof[i].ok) vl53l0xContinuo(&tof[i], 50);   /* una medicion cada 50 ms = 20 Hz */
+   imprimir("\r\nModo de lectura:\r\n"
+            "  p = polling (pregunta por I2C)\r\n"
+            "  i = interrupcion (pin G de ToF1/2/3 -> LCD3 / LCD4 / LCDRS)\r\n> ");
+   do { c = teclaEsperar(); } while (c != 'p' && c != 'i' && !pedidoSalir(c));
+   if (pedidoSalir(c)) {
+      for (uint8_t i = 0; i < n; i++) if (tof[i].ok) vl53l0xDetener(&tof[i]);
+      return;
+   }
+   imprimir("%c\r\n", c);
+   uint8_t conIrq = (c == 'i');
 
-   imprimir("'q' = volver\r\n\r\n");
-   delay_t t;
+   for (uint8_t i = 0; i < n; i++) {
+      if (!tof[i].ok) continue;
+      if (conIrq) vl53l0xHabilitarIrq(&tof[i], pinesInt[i], puertosInt[i], bitsInt[i], canalesInt[i]);
+      vl53l0xContinuo(&tof[i], 50);   /* una medicion cada 50 ms = 20 Hz */
+   }
+
+   for (uint8_t i = 0; i < n; i++)
+      if (tof[i].ok)
+         imprimir("ToF%d: presupuesto %lu us, OSC_CALIBRATE_VAL %u\r\n", i + 1,
+                  (unsigned long)tof[i].presupuestoUs, tof[i].oscCal);
+   imprimir("Cada segundo: mediciones leidas por sensor (tiene que dar ~20).\r\n'q' = volver\r\n\r\n");
+   delay_t t, tSeg;
    delayConfig(&t, 100);
+   delayConfig(&tSeg, 1000);
    while (1) {
       if (pedidoSalir(teclaLeer())) break;
 
       for (uint8_t i = 0; i < n; i++) {
          uint16_t mm;
-         if (tof[i].ok && vl53l0xLeer(&tof[i], &mm)) ultimo[i] = mm;
+         if (tof[i].ok && vl53l0xLeer(&tof[i], &mm)) { ultimo[i] = mm; cuenta[i]++; }
       }
       if (delayRead(&t)) {
          for (uint8_t i = 0; i < n; i++) {
@@ -134,9 +161,23 @@ void testTof(void)
          }
          imprimir("\r\n");
       }
+      if (delayRead(&tSeg)) {
+         imprimir("   [%s]", conIrq ? "interrupcion" : "polling");
+         for (uint8_t i = 0; i < n; i++) {
+            if (!tof[i].ok) continue;
+            imprimir("  ToF%d %2lu/s", i + 1, (unsigned long)cuenta[i]);
+            if (conIrq) imprimir(" (perdidas %lu)", (unsigned long)tof[i].perdidas);
+            cuenta[i] = 0;
+         }
+         imprimir("\r\n");
+      }
    }
 
-   for (uint8_t i = 0; i < n; i++) if (tof[i].ok) vl53l0xDetener(&tof[i]);
+   for (uint8_t i = 0; i < n; i++) {
+      if (!tof[i].ok) continue;
+      vl53l0xDeshabilitarIrq(&tof[i]);   /* la ISR apunta a 'tof', que deja de existir */
+      vl53l0xDetener(&tof[i]);
+   }
 }
 
 /* ------------------------------------------------------------------ */

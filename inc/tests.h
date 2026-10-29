@@ -8,5 +8,6 @@ void testTof(void);
 void testMotores(void);
 void testBateria(void);
 void testUartEsp(void);
+void testImu(void);
 
 #endif

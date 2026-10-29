@@ -6,6 +6,7 @@
 #include "vl53l0x.h"
 #include "pines.h"
 #include "tiempo.h"
+#include "gpio_irq.h"
 
 /* ---------------- Registros ---------------- */
 #define SYSRANGE_START                              0x00
@@ -260,6 +261,9 @@ uint8_t vl53l0xInit(vl53l0x_t *d)
 {
    d->ok = 0;
    d->timeout = 0;
+   d->usaIrq = 0;
+   d->listo = 0;
+   d->perdidas = 0;
    if (!vl53l0xPresente(d->dir)) return 0;
 
    /* I/O a 2,8 V (lo que usa el regulador del modulo) */
@@ -355,9 +359,11 @@ uint8_t vl53l0xIniciarVarios(vl53l0x_t *devs, const gpioMap_t *xshuts,
    delay(10);
 
    for (uint8_t i = 0; i < n; i++) {
-      devs[i].xshut = xshuts[i];
-      devs[i].dir   = VL53L0X_DIR_DEFAULT;
-      devs[i].ok    = 0;
+      devs[i].xshut  = xshuts[i];
+      devs[i].dir    = VL53L0X_DIR_DEFAULT;
+      devs[i].ok     = 0;
+      devs[i].usaIrq = 0;
+      devs[i].listo  = 0;
 
       vl53l0xPrender(xshuts[i]);
       delay(10);                        /* arranque: 1,2 ms segun datasheet */
@@ -378,6 +384,7 @@ void vl53l0xContinuo(vl53l0x_t *d, uint32_t periodoMs)
 
    if (periodoMs != 0) {
       uint16_t osc = rd16(d, OSC_CALIBRATE_VAL);
+      d->oscCal = osc;
       if (osc != 0) periodoMs *= osc;
       wr32(d, SYSTEM_INTERMEASUREMENT_PERIOD, periodoMs);
       wr8(d, SYSRANGE_START, 0x04);     /* modo continuo temporizado */
@@ -396,10 +403,56 @@ void vl53l0xDetener(vl53l0x_t *d)
 
 uint8_t vl53l0xLeer(vl53l0x_t *d, uint16_t *mm)
 {
-   if ((rd8(d, RESULT_INTERRUPT_STATUS) & 0x07) == 0) return 0;  /* todavia no */
+   if (d->usaIrq) {
+      if (!d->listo) {
+         /* Sin aviso de la ISR. El pin queda en bajo hasta que se limpia la
+          * interrupcion del sensor, asi que un nivel bajo puede ser un flanco
+          * perdido... o el pin que todavia no termino de subir despues de la
+          * lectura anterior (algunos modulos lo suben despacio). Solo en ese
+          * caso se confirma por I2C, para no leer dos veces la misma medicion. */
+         if (gpioRead(d->pinInt)) return 0;
+         if ((rd8(d, RESULT_INTERRUPT_STATUS) & 0x07) == 0) return 0;
+      }
+      d->listo = 0;
+   } else {
+      if ((rd8(d, RESULT_INTERRUPT_STATUS) & 0x07) == 0) return 0;  /* todavia no */
+   }
    *mm = rd16(d, RESULT_RANGE_STATUS + 10);
-   wr8(d, SYSTEM_INTERRUPT_CLEAR, 0x01);
+   wr8(d, SYSTEM_INTERRUPT_CLEAR, 0x01);    /* el pin G vuelve a subir */
    return 1;
+}
+
+/* ---------------- Modo por interrupcion ---------------- */
+static void cbIrq(void *ctx, uint8_t nivel)
+{
+   vl53l0x_t *d = (vl53l0x_t *)ctx;
+   /* Un aviso real deja el pin en bajo hasta que se lee la medicion. Si ya
+    * volvio a alto, fue un pico de ruido en el flanco: se ignora. */
+   if (nivel) return;
+   if (d->listo) d->perdidas++;
+   d->tAviso = tiempoCiclos();
+   d->listo = 1;
+}
+
+void vl53l0xHabilitarIrq(vl53l0x_t *d, gpioMap_t pin, uint8_t puerto, uint8_t bit, uint8_t canal)
+{
+   /* GPIO1 es de drenaje abierto: el pull-up interno asegura el nivel alto
+    * aunque el modulo no traiga su propia resistencia */
+   gpioInit(pin, GPIO_INPUT_PULLUP);
+   d->pinInt = pin;
+   d->canalIrq = canal;
+   d->listo = 0;
+   d->perdidas = 0;
+   gpioIrqConfigCtx(canal, puerto, bit, GPIO_IRQ_BAJADA, cbIrq, d);
+   d->usaIrq = 1;
+}
+
+void vl53l0xDeshabilitarIrq(vl53l0x_t *d)
+{
+   if (!d->usaIrq) return;
+   gpioIrqDeshabilitar(d->canalIrq);
+   d->usaIrq = 0;
+   d->listo = 0;
 }
 
 uint16_t vl53l0xMedirUnaVez(vl53l0x_t *d)

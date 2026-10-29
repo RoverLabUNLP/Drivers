@@ -22,9 +22,17 @@ typedef enum {
 } gpioIrqFlanco_t;
 
 typedef void (*gpioIrqCallback_t)(uint8_t nivel);
+typedef void (*gpioIrqCallbackCtx_t)(void *ctx, uint8_t nivel);
 
 void gpioIrqConfig(uint8_t canal, uint8_t puerto, uint8_t bit,
                    gpioIrqFlanco_t flanco, gpioIrqCallback_t cb);
+
+/* Igual, pero el callback recibe ademas un puntero que elige quien configura
+ * (por ejemplo, el sensor que genero el aviso). Util cuando varios
+ * dispositivos iguales comparten el mismo driver. */
+void gpioIrqConfigCtx(uint8_t canal, uint8_t puerto, uint8_t bit,
+                      gpioIrqFlanco_t flanco, gpioIrqCallbackCtx_t cb, void *ctx);
+
 void gpioIrqDeshabilitar(uint8_t canal);
 
 #endif

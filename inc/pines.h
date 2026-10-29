@@ -43,6 +43,26 @@
 #define PIN_XSHUT1       GPIO4    /* P6_8  */
 #define PIN_XSHUT2       GPIO5    /* P6_9  */
 #define PIN_XSHUT3       GPIO6    /* P6_10 */
+/* 400 kHz: lo soportan los VL53L0X y el MPU6050. Si con cables largos de
+ * protoboard aparecen errores, bajar a 100000. */
+#define I2C_VELOCIDAD    400000
+
+/* Avisos de "medicion lista" (pin G = GPIO1 de cada VL53L0X, activo en bajo) */
+#define PIN_TOF1_INT     LCD3     /* P4_6  = GPIO2[6]  (CON2_26) */
+#define TOF1_INT_PUERTO  2
+#define TOF1_INT_BIT     6
+#define PIN_TOF2_INT     LCD4     /* P4_10 = GPIO5[14] (CON2_22) */
+#define TOF2_INT_PUERTO  5
+#define TOF2_INT_BIT     14
+#define PIN_TOF3_INT     LCDRS    /* P4_8  = GPIO5[12] (CON2_24) */
+#define TOF3_INT_PUERTO  5
+#define TOF3_INT_BIT     12
+
+/* GY-521 (MPU6050) en el mismo bus, direccion 0x68 (AD0 a GND).
+ * Su pin INT ("dato listo", activo en alto) va a LCD_EN. */
+#define PIN_MPU_INT      LCDEN    /* P4_9  = GPIO5[13] (CON2_23) */
+#define MPU_INT_PUERTO   5
+#define MPU_INT_BIT      13
 
 /* ---------------- UART con la ESP32-CAM ---------------- */
 #define UART_ESP         UART_232 /* RS232_TXD = P2_3, RS232_RXD = P2_4 (USART3) */
@@ -53,6 +73,10 @@
 #define IRQ_CANAL_ENC_IZQ  0
 #define IRQ_CANAL_ENC_DER  1
 #define IRQ_CANAL_ECHO     2
-/* 3..5 reservados para TOF1..3_INT, 6 para MPU_INT */
+#define IRQ_CANAL_TOF1     3
+#define IRQ_CANAL_TOF2     4
+#define IRQ_CANAL_TOF3     5
+#define IRQ_CANAL_MPU      6
+/* 7 queda libre */
 
 #endif

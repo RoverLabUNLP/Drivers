@@ -22,6 +22,7 @@ static void menu(void)
             "  4  Motores L298N         (T_FIL1 / T_FIL3 + GPIO0..3)\r\n"
             "  5  Bateria por ADC       (CH1)\r\n"
             "  6  UART con ESP32-CAM    (RS232_TXD / RS232_RXD)\r\n"
+            "  7  IMU MPU6050           (I2C0, direccion 0x68)\r\n"
             "Elegir: ");
 }
 
@@ -46,6 +47,7 @@ int main(void)
       case '4': testMotores();  break;
       case '5': testBateria();  break;
       case '6': testUartEsp();  break;
+      case '7': testImu();      break;
       default:  imprimir("Opcion invalida\r\n"); break;
       }
       gpioWrite(LED3, OFF);
