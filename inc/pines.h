@@ -81,4 +81,9 @@
 #define IRQ_CANAL_MPU      6
 /* 7 queda libre */
 
+/* Prioridad de las interrupciones de los drivers (GPIO y UART). Con FreeRTOS,
+ * una ISR que llama a funciones ...FromISR tiene que tener prioridad numerica
+ * >= configMAX_SYSCALL_INTERRUPT_PRIORITY (5 en la configuracion de la CIAA). */
+#define IRQ_PRIORIDAD_DRIVERS  5
+
 #endif

@@ -24,6 +24,7 @@ static void menu(void)
             "  6  UART con ESP32-CAM    (RS232_TXD / RS232_RXD)\r\n"
             "  7  IMU MPU6050           (I2C0, direccion 0x68)\r\n"
             "  8  TODO JUNTO            (motores + todos los sensores, auto armado)\r\n"
+            "  9  Enlace ESP32-CAM      (driver enlace_esp: $TWIST y telemetria)\r\n"
             "Elegir: ");
 }
 
@@ -50,6 +51,7 @@ int main(void)
       case '6': testUartEsp();  break;
       case '7': testImu();      break;
       case '8': testIntegral(); break;
+      case '9': testEnlace();   break;
       default:  imprimir("Opcion invalida\r\n"); break;
       }
       gpioWrite(LED3, OFF);

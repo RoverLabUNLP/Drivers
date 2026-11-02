@@ -14,6 +14,12 @@
  *    si pasa de ~10 ms, algo esta bloqueando y se pierden muestras de la IMU
  *
  * La consola usa la cola sin espera (imprimirCola) para no frenar los sensores.
+ *
+ * Telemetria real hacia la ESP32 cada 100 ms (driver enlace_esp), para verla en la web:
+ *   $SENS,<distancia mas cercana entre los 3 VL53L0X y el HC-SR04 [cm]>,<pack mas bajo [V]>
+ *   $ODOM,<pulsos izq>,<pulsos der>
+ *   $IMU,<giro Z [grados/s]>,0,<temperatura [C]>     (significado A CONFIRMAR con la web)
+ * Los $TWIST que llegan de la web se muestran pero NO mueven los motores (eso es la prueba 9).
  */
 #include "tests.h"
 #include "consola.h"
@@ -25,6 +31,7 @@
 #include "vl53l0x.h"
 #include "mpu6050.h"
 #include "bateria.h"
+#include "enlace_esp.h"
 #include <string.h>
 
 #define AUTOPARADA_MS   5000
@@ -70,7 +77,7 @@ void testIntegral(void)
    encodersInit();
    hcsr04Init();
    bateriaInit();
-   uartConfig(UART_ESP, UART_ESP_BAUD);
+   enlaceInit();
    i2cInit(BUS_I2C, I2C_VELOCIDAD);
 
    uint8_t nTof = vl53l0xIniciarVarios(tof, xshutsI, dirsI, 3);
@@ -96,15 +103,14 @@ void testIntegral(void)
    /* ---- estado de la prueba ---- */
    uint16_t tofMm[3] = { 0, 0, 0 };
    uint32_t tofCuenta[3] = { 0, 0, 0 };
-   uint32_t imuCuenta = 0, usSinEco = 0, espLineas = 0, lazoMaxUs = 0;
+   uint32_t imuCuenta = 0, usSinEco = 0, lazoMaxUs = 0;
    uint32_t usMm = 0;
    uint8_t  usValido = 0;
    int32_t  gzMin = 0, gzMax = 0;
-   char     espUltima[48] = "-";
-   char     espLinea[48];
-   uint32_t espLargo = 0;
+   enlaceTwist_t tw = { 0, 0, 0 };
 
-   delay_t tSeg, tHc, tAuto;
+   delay_t tSeg, tHc, tAuto, tTele;
+   delayConfig(&tTele, 100);
    delayConfig(&tSeg, 1000);
    delayConfig(&tHc, PERIODO_HC_MS);
    delayConfig(&tAuto, AUTOPARADA_MS);
@@ -152,16 +158,19 @@ void testIntegral(void)
       else if (e == HCSR04_SIN_ECO) { hcsr04LeerMm(); usSinEco++; usValido = 0; }
       if (delayRead(&tHc)) hcsr04Disparar();
 
-      /* ---- UART desde la ESP32 (lineas) ---- */
-      uint8_t b;
-      while (uartReadByte(UART_ESP, &b)) {
-         if (b == '\n' || espLargo >= sizeof(espLinea) - 1) {
-            espLinea[espLargo] = 0;
-            if (espLargo) { strcpy(espUltima, espLinea); espLineas++; }
-            espLargo = 0;
-         } else if (b != '\r') {
-            espLinea[espLargo++] = (b >= 32 && b < 127) ? (char)b : '.';   /* basura del arranque -> '.' */
-         }
+      /* ---- enlace con la ESP32 ---- */
+      enlaceProcesar();
+      enlaceTwistNuevo(&tw);
+      if (delayRead(&tTele)) {
+         uint32_t cerca = 0xFFFFFFFFu;
+         for (int i = 0; i < 3; i++)
+            if (tof[i].ok && tofMm[i] && tofMm[i] < VL53L0X_FUERA_RANGO && tofMm[i] < cerca) cerca = tofMm[i];
+         if (usValido && usMm < cerca) cerca = usMm;
+         if (cerca == 0xFFFFFFFFu) cerca = 0;
+         uint32_t bm = bateriaMotoresMv(), be = bateriaElectronicaMv();
+         enlaceEnviarSens(cerca, bm < be ? bm : be);
+         enlaceEnviarOdom((int32_t)encoderPulsos(ENC_IZQ), (int32_t)encoderPulsos(ENC_DER));
+         enlaceEnviarImu(imuOk ? d.giro_mdps[2] : 0, 0, imuOk ? d.temp_cC * 10 : 0);
       }
 
       /* ---- resumen cada 1 s ---- */
@@ -193,12 +202,17 @@ void testIntegral(void)
          }
 
          uint32_t bm = bateriaMotoresMv(), be = bateriaElectronicaMv();
-         imprimirCola("BAT motores %lu.%02lu V%s electronica %lu.%02lu V%s | ESP %lu lineas, ultima: %s | lazo max %lu us%s\r\n\r\n",
+         enlaceStats_t es;
+         enlaceLeerStats(&es);
+         uint32_t msTw = enlaceMsDesdeTwist();
+         imprimirCola("BAT motores %lu.%02lu V%s electronica %lu.%02lu V%s | ESP %lu tramas (err %lu), TWIST %ld,%ld %s | lazo max %lu us%s\r\n\r\n",
                       (unsigned long)(bm / 1000), (unsigned long)((bm % 1000) / 10),
                       (bm > 1000 && bm < BAT_MINIMO_MV) ? " BAJA!" : "",
                       (unsigned long)(be / 1000), (unsigned long)((be % 1000) / 10),
                       (be > 1000 && be < BAT_MINIMO_MV) ? " BAJA!" : "",
-                      (unsigned long)espLineas, espUltima, (unsigned long)lazoMaxUs,
+                      (unsigned long)es.tramasOk, (unsigned long)(es.errChecksum + es.errFormato),
+                      (long)tw.v, (long)tw.w, msTw == 0xFFFFFFFFu ? "(ninguno)" : (msTw > 1000 ? "(viejo)" : ""),
+                      (unsigned long)lazoMaxUs,
                       consolaDescartados() ? " (consola saturada)" : "");
          imuCuenta = 0; gzMin = 0; gzMax = 0; lazoMaxUs = 0;
       }
@@ -215,6 +229,7 @@ void testIntegral(void)
       vl53l0xDetener(&tof[i]);
    }
    if (imuOk) mpu6050DeshabilitarIrq(&imu);
+   enlaceDetener();
    while (!consolaColaVacia()) consolaServicio();
    (void)usSinEco;
 }

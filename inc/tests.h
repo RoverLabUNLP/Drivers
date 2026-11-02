@@ -10,5 +10,6 @@ void testBateria(void);
 void testUartEsp(void);
 void testImu(void);
 void testIntegral(void);
+void testEnlace(void);
 
 #endif

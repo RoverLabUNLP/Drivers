@@ -7,7 +7,7 @@ de pruebas con menú para probar cada periférico por separado. Probado en la pl
 |---|---|---|
 | Encoder LM393 izq / der | GPIO7 (CON2_38) / GPIO8 (CON2_40) | OK, 20 pulsos por vuelta |
 | ADC (batería) | CH1 | OK con 0 V y 3,3 V; falta probar con el divisor |
-| UART con la ESP32-CAM | RS232_TXD / RS232_RXD | OK en loopback; falta la ESP32 real |
+| UART con la ESP32-CAM | RS232_TXD → IO13, RS232_RXD ← IO14 | OK con la ESP32 real (eco y `$TWIST`); driver `enlace_esp` escrito, falta probarlo |
 | HC-SR04 | TRIG LCD1 (CON2_30), ECHO LCD2 (CON2_28) por divisor 1k/2k | OK |
 | 3 × VL53L0X | I2C_SDA / I2C_SCL, XSHUT GPIO4/5/6 (CON2_33/36/35), G → LCD3 / LCD4 / LCDRS (CON2_26/22/24) | OK, máx. 1300 mm, ~20 mediciones/s por polling o por interrupción |
 | IMU MPU6050 (GY-521) | I2C_SDA / I2C_SCL (0x68), INT → LCDEN (CON2_23) | OK, 100 muestras/s por polling o por interrupción; giro y acelerómetro calibrados |
@@ -21,12 +21,13 @@ Todos los pines están en `inc/pines.h` (esquemático Rev A, hoja 2). El I2C cor
 config.mk                 configuración del proyecto (va en app/)
 inc/                      headers de los drivers y de las pruebas
 src/                      drivers + main.c (menú) + test_sensores.c + test_actuadores.c + test_imu.c
+                          + test_integral.c + test_enlace.c
 test_uart_esp32cam/       sketch de eco para la ESP32-CAM (prueba 6)
 ```
 
 Drivers (se copian tal cual al firmware final, no dependen de los tests ni de FreeRTOS):
-`motores`, `encoders`, `hcsr04`, `vl53l0x`, `mpu6050`, `bateria`, `gpio_irq`, `tiempo`.
-Pruebas: `main.c`, `consola`, `test_sensores.c`, `test_actuadores.c`, `test_imu.c`.
+`motores`, `encoders`, `hcsr04`, `vl53l0x`, `mpu6050`, `bateria`, `enlace_esp`, `gpio_irq`, `tiempo`.
+Pruebas: `main.c`, `consola`, `test_sensores.c`, `test_actuadores.c`, `test_imu.c`, `test_integral.c`, `test_enlace.c`.
 
 ## Cómo compilar y cargar (Embedded IDE, CIAA Software 1.1)
 
@@ -55,6 +56,8 @@ LED verde = menú, LED3 = prueba corriendo, `q` = volver al menú.
 | 5 | Batería por ADC |
 | 6 | UART con la ESP32-CAM |
 | 7 | IMU MPU6050 (`p` / `i`; `c` recalibra el giro, `a` calibra el acelerómetro, `v` oculta los datos) |
+| 8 | Todo junto: motores por teclado + todos los sensores por interrupción + telemetría real a la ESP32 |
+| 9 | Enlace con la ESP32-CAM: `$TWIST` desde la web y telemetría de prueba; `m` = motores desde la web |
 
 Reglas: desenchufar el USB antes de cablear y conectar **solo** el módulo que se prueba.
 Los sensores se alimentan de +3,3 V y +5 V de la placa (+5 V da ~4,5 V por el diodo del USB).
@@ -89,6 +92,12 @@ avisa y reintenta). Quieta y plana: Z ≈ +1000 mg, |a| ≈ 1000 mg, giro ≈ 0 
 100 muestras/s, dt ≈ 9,9 ms, perdidas 0. La calibración del acelerómetro de nuestro GY-521 está cargada en
 `CAL_ACC_OFF` / `CAL_ACC_1G` (`test_imu.c`); si se cambia el sensor, repetirla con `a` (6 posiciones).
 
+**9 · Enlace ESP32-CAM:** mismo cableado que la 6 (RS232_TXD → IO13, RS232_RXD ← IO14, GND común), con el firmware
+del repo esp32-cam. Tramas de texto `$CUERPO*HH\r\n` (checksum XOR opcional). Se descarta todo hasta un `$` (la ESP32
+mete basura en IO14 al arrancar). En la web tienen que verse la distancia de prueba subiendo y bajando, la batería real
+y la IMU en 1.0 / 2.0 / 3.0; al tocar W/A/S/D cambian v y w en la consola. `m` maneja los motores (izq = v − w,
+der = v + w; si pasan 500 ms sin `$TWIST`, para). Probar con las ruedas en el aire.
+
 ## APIs para el firmware de alto nivel
 
 | Módulo | Funciones |
@@ -99,6 +108,7 @@ avisa y reintenta). Quieta y plana: Z ≈ +1000 mg, |a| ≈ 1000 mg, giro ≈ 0 
 | `vl53l0x` | `vl53l0xIniciarVarios()`, `vl53l0xContinuo()`, `vl53l0xLeer()` (no bloqueante), `vl53l0xHabilitarIrq()` |
 | `mpu6050` | `mpu6050Init()`, `mpu6050CalibrarGiro()`, `mpu6050FijarCalAcc()`, `mpu6050Leer()` (no bloqueante, con `t_ciclos` por muestra), `mpu6050HabilitarIrq()` |
 | `bateria` | `bateriaInit()`, `bateriaMilivolts()` |
+| `enlace_esp` | `enlaceInit()`, `enlaceProcesar()` (llamar seguido), `enlaceTwistNuevo()`, `enlaceTwistVencido(ms)`, `enlaceEnviarSens()`, `enlaceEnviarOdom()`, `enlaceEnviarImu()`, `enlaceLeerStats()` |
 | `gpio_irq` | `gpioIrqConfig()` / `gpioIrqConfigCtx()`: interrupción por flanco en cualquier GPIO |
 | `tiempo` | `tiempoCiclos()`, `tiempoUsDesde()`: tiempo en µs con el contador de ciclos |
 
@@ -121,6 +131,6 @@ Para FreeRTOS:
 - [ ] Corriente del motor libre y bloqueado (fusible)
 - [ ] Prueba con los 4 motores (2 en paralelo por canal)
 - [ ] Calibrar el offset de cada VL53L0X en su lugar definitivo
-- [ ] UART con la ESP32-CAM real
+- [ ] Probar `enlace_esp` con la ESP32-CAM (prueba 9) y acordar unidades de `$TWIST` (supuesto −1..1), campos de `$IMU` y checksum
 - [ ] Batería real por ADC con el divisor 100k/33k (uno por pack: CH1 motores, CH2 electrónica; sumar el canal al driver `bateria`)
 - [ ] Fusión para el rumbo: Kalman 1D o filtro complementario con el giro Z + los encoders

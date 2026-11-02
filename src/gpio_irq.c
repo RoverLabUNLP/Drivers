@@ -1,4 +1,5 @@
 #include "gpio_irq.h"
+#include "pines.h"
 #include "chip.h"
 
 #define N_CANALES 8
@@ -30,6 +31,7 @@ static void configurar(uint8_t canal, uint8_t puerto, uint8_t bit, gpioIrqFlanco
    else
       Chip_PININT_DisableIntLow(LPC_GPIO_PIN_INT, PININTCH(canal));
 
+   NVIC_SetPriority((IRQn_Type)(PIN_INT0_IRQn + canal), IRQ_PRIORIDAD_DRIVERS);
    NVIC_ClearPendingIRQ((IRQn_Type)(PIN_INT0_IRQn + canal));
    NVIC_EnableIRQ((IRQn_Type)(PIN_INT0_IRQn + canal));
 }
