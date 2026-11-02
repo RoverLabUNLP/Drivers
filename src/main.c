@@ -20,9 +20,10 @@ static void menu(void)
             "  2  HC-SR04               (LCD1 trig / LCD2 echo)\r\n"
             "  3  VL53L0X               (I2C0 + XSHUT GPIO4/5/6)\r\n"
             "  4  Motores L298N         (T_FIL1 / T_FIL3 + GPIO0..3)\r\n"
-            "  5  Bateria por ADC       (CH1)\r\n"
+            "  5  Baterias por ADC      (CH1 motores, CH2 electronica)\r\n"
             "  6  UART con ESP32-CAM    (RS232_TXD / RS232_RXD)\r\n"
             "  7  IMU MPU6050           (I2C0, direccion 0x68)\r\n"
+            "  8  TODO JUNTO            (motores + todos los sensores, auto armado)\r\n"
             "Elegir: ");
 }
 
@@ -48,6 +49,7 @@ int main(void)
       case '5': testBateria();  break;
       case '6': testUartEsp();  break;
       case '7': testImu();      break;
+      case '8': testIntegral(); break;
       default:  imprimir("Opcion invalida\r\n"); break;
       }
       gpioWrite(LED3, OFF);

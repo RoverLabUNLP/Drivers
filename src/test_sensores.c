@@ -183,10 +183,10 @@ void testTof(void)
 /* ------------------------------------------------------------------ */
 void testBateria(void)
 {
-   imprimir("\r\n--- BATERIA (ADC CH1) ---\r\n"
-            "Divisor 100k/33k a CH1. Sin bateria se puede probar con un\r\n"
-            "potenciometro entre 3,3 V y GND (cursor a CH1). NUNCA mas de 3,3 V en CH1.\r\n"
-            "'q' = volver\r\n\r\n");
+   imprimir("\r\n--- BATERIAS (ADC) ---\r\n"
+            "CH1 = pack motores, CH2 = pack electronica (divisor 100k/33k en cada uno).\r\n"
+            "Sin baterias: potenciometro entre 3,3 V y GND, cursor a CH1 o CH2.\r\n"
+            "NUNCA mas de 3,3 V en CH1 ni CH2. 'q' = volver\r\n\r\n");
    bateriaInit();
 
    delay_t t;
@@ -194,11 +194,17 @@ void testBateria(void)
    while (1) {
       if (pedidoSalir(teclaLeer())) break;
       if (delayRead(&t)) {
-         uint32_t pin = bateriaPinMilivolts(), bat = bateriaMilivolts();
-         imprimir("ADC %4u   pin %lu.%03lu V   bateria %lu.%02lu V\r\n",
-                  bateriaCrudo(),
-                  (unsigned long)(pin / 1000), (unsigned long)(pin % 1000),
-                  (unsigned long)(bat / 1000), (unsigned long)((bat % 1000) / 10));
+         static const adcMap_t canales[2] = { PIN_BAT_MOTORES, PIN_BAT_ELECTRONICA };
+         static const char *nombres[2] = { "motores    CH1", "electronica CH2" };
+         for (int i = 0; i < 2; i++) {
+            uint32_t pin = bateriaPinMilivoltsCanal(canales[i]), bat = bateriaMilivoltsCanal(canales[i]);
+            imprimir("%s: ADC %4u  pin %lu.%03lu V  pack %lu.%02lu V%s   ", nombres[i],
+                     bateriaCrudoCanal(canales[i]),
+                     (unsigned long)(pin / 1000), (unsigned long)(pin % 1000),
+                     (unsigned long)(bat / 1000), (unsigned long)((bat % 1000) / 10),
+                     (bat > 1000 && bat < BAT_MINIMO_MV) ? " BAJA!" : "");
+         }
+         imprimir("\r\n");
       }
    }
 }

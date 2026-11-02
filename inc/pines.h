@@ -35,8 +35,10 @@
 #define ECHO_PUERTO      2
 #define ECHO_BIT         5
 
-/* ---------------- Bateria ---------------- */
-#define PIN_BATERIA      CH1      /* ADC0_1, divisor 100k / 33k */
+/* ---------------- Baterias (un divisor 100k / 33k por pack) ---------------- */
+#define PIN_BAT_MOTORES     CH1   /* ADC0_1 = P1 pin 13 (BAT_MOT_ADC) */
+#define PIN_BAT_ELECTRONICA CH2   /* ADC0_2 = P1 pin 11 (BAT_LOG_ADC) */
+#define PIN_BATERIA         PIN_BAT_MOTORES   /* compatibilidad */
 
 /* ---------------- I2C: VL53L0X x3 (+ GY-521) ---------------- */
 #define BUS_I2C          I2C0     /* pines I2C_SDA / I2C_SCL */

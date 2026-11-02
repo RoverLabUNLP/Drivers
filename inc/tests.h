@@ -9,5 +9,6 @@ void testMotores(void);
 void testBateria(void);
 void testUartEsp(void);
 void testImu(void);
+void testIntegral(void);
 
 #endif
