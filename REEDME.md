@@ -7,7 +7,7 @@ de pruebas con menú para probar cada periférico por separado. Probado en la pl
 |---|---|---|
 | Encoder LM393 izq / der | GPIO7 (CON2_38) / GPIO8 (CON2_40) | OK, 20 pulsos por vuelta |
 | ADC (batería) | CH1 | OK con 0 V y 3,3 V; falta probar con el divisor |
-| UART con la ESP32-CAM | RS232_TXD → IO13, RS232_RXD ← IO14 | OK con la ESP32 real (eco y `$TWIST`); driver `enlace_esp` escrito, falta probarlo |
+| UART con la ESP32-CAM | RS232_TXD → IO13, RS232_RXD ← IO14 | OK con la ESP32 real: driver `enlace_esp` probado (prueba 9, 02/11/2026), motores desde la web y telemetría |
 | HC-SR04 | TRIG LCD1 (CON2_30), ECHO LCD2 (CON2_28) por divisor 1k/2k | OK |
 | 3 × VL53L0X | I2C_SDA / I2C_SCL, XSHUT GPIO4/5/6 (CON2_33/36/35), G → LCD3 / LCD4 / LCDRS (CON2_26/22/24) | OK, máx. 1300 mm, ~20 mediciones/s por polling o por interrupción |
 | IMU MPU6050 (GY-521) | I2C_SDA / I2C_SCL (0x68), INT → LCDEN (CON2_23) | OK, 100 muestras/s por polling o por interrupción; giro y acelerómetro calibrados |
@@ -131,6 +131,8 @@ Para FreeRTOS:
 - [ ] Corriente del motor libre y bloqueado (fusible)
 - [ ] Prueba con los 4 motores (2 en paralelo por canal)
 - [ ] Calibrar el offset de cada VL53L0X en su lugar definitivo
-- [ ] Probar `enlace_esp` con la ESP32-CAM (prueba 9) y acordar unidades de `$TWIST` (supuesto −1..1), campos de `$IMU` y checksum
+- [x] Probar `enlace_esp` con la ESP32-CAM (prueba 9)
+- [ ] Arranque automático sin USB (con solo las pilas se queda en el menú)
+- [ ] Acordar unidades de `$TWIST` (supuesto −1..1), campos de `$IMU` y checksum
 - [ ] Batería real por ADC con el divisor 100k/33k (uno por pack: CH1 motores, CH2 electrónica; sumar el canal al driver `bateria`)
 - [ ] Fusión para el rumbo: Kalman 1D o filtro complementario con el giro Z + los encoders
