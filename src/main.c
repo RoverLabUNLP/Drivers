@@ -17,10 +17,10 @@ static void menu(void)
 {
    imprimir("\r\n=========== Auto remoto - drivers_auto ===========\r\n"
             "  1  Encoders LM393        (GPIO7 / GPIO8)\r\n"
-            "  2  HC-SR04               (LCD1 trig / LCD2 echo)\r\n"
-            "  3  VL53L0X               (I2C0 + XSHUT GPIO4/5/6)\r\n"
-            "  4  Motores L298N         (T_FIL1 / T_FIL3 + GPIO0..3)\r\n"
-            "  5  Baterias por ADC      (CH1 motores, CH2 electronica)\r\n"
+            "  2  HC-SR04               (GPIO3 trig / GPIO5 echo)\r\n"
+            "  3  VL53L0X               (I2C0 + XSHUT LCD3/LCD2/LCD1)\r\n"
+            "  4  Motores L298N         (T_FIL1 / T_COL1 + T_COL0, T_FIL2, T_FIL3, T_FIL0)\r\n"
+            "  5  Baterias por ADC      (CH2 motores, CH1 electronica)\r\n"
             "  6  UART con ESP32-CAM    (RS232_TXD / RS232_RXD)\r\n"
             "  7  IMU MPU6050           (I2C0, direccion 0x68)\r\n"
             "  8  TODO JUNTO            (motores + todos los sensores, auto armado)\r\n"
@@ -28,11 +28,37 @@ static void menu(void)
             "Elegir: ");
 }
 
+/* Espera una tecla hasta 'ms' milisegundos. -1 si no llego ninguna. */
+static int teclaEsperarMs(uint32_t ms)
+{
+   delay_t t;
+   int c;
+   delayConfig(&t, ms);
+   while ((c = teclaLeer()) < 0) {
+      consolaServicio();
+      if (delayRead(&t)) return -1;
+   }
+   return c;
+}
+
 int main(void)
 {
    boardConfig();
    consolaInit();
    tiempoInit();
+
+   /* Arranque sin compu: si en 3 s no llega ninguna tecla por la consola USB,
+    * entra directo a la prueba 8 (todos los sensores + motores desde la web).
+    * Con la compu conectada, apretar cualquier tecla para ir al menu. */
+   imprimir("\r\nAuto remoto: tecla en 3 s = menu. Si no, MODO AUTO (prueba 8 + web).\r\n");
+   gpioWrite(LEDB, ON);
+   int t = teclaEsperarMs(3000);
+   gpioWrite(LEDB, OFF);
+   if (t < 0) {
+      gpioWrite(LED3, ON);
+      testIntegral();
+      gpioWrite(LED3, OFF);
+   }
 
    while (1) {
       menu();

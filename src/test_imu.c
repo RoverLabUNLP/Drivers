@@ -147,7 +147,7 @@ void testImu(void)
 
    imprimir("\r\n--- IMU MPU6050 (GY-521) ---\r\n"
             "VCC -> +5 V (o +3,3 V)   GND   SDA -> I2C_SDA   SCL -> I2C_SCL\r\n"
-            "AD0 -> GND (direccion 0x68). INT -> LCDEN (solo modo interrupcion). XDA, XCL sin conectar.\r\n"
+            "AD0 -> GND (direccion 0x68). INT -> GPIO1 (solo modo interrupcion). XDA, XCL sin conectar.\r\n"
             "'c' = recalibrar giroscopio, 'a' = calibrar acelerometro, 'q' = volver\r\n"
             "'v' = mostrar/ocultar los datos (para medir los tiempos sin la demora de la consola)\r\n\r\n");
 
@@ -176,7 +176,7 @@ void testImu(void)
 
    imprimir("\r\nModo de lectura:\r\n"
             "  p = polling (pregunta por I2C)\r\n"
-            "  i = interrupcion (pin INT -> LCDEN)\r\n> ");
+            "  i = interrupcion (pin INT -> GPIO1)\r\n> ");
    int c;
    do { c = teclaEsperar(); } while (c != 'p' && c != 'i' && !pedidoSalir(c));
    if (pedidoSalir(c)) return;

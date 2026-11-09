@@ -42,7 +42,7 @@ void testEncoders(void)
 void testHcsr04(void)
 {
    imprimir("\r\n--- HC-SR04 ---\r\n"
-            "VCC 5 V   TRIG -> LCD1   ECHO -> divisor 1k/2k -> LCD2\r\n"
+            "VCC 5 V   TRIG -> GPIO3   ECHO -> divisor 1k/2k -> GPIO5\r\n"
             "Mide cada 100 ms. 'q' = volver\r\n\r\n");
    hcsr04Init();
 
@@ -83,7 +83,7 @@ void testTof(void)
    uint8_t   n;
 
    imprimir("\r\n--- VL53L0X ---\r\n"
-            "VIN 3,3 V   SDA/SCL -> I2C_SDA/I2C_SCL   X -> GPIO4/5/6\r\n"
+            "VIN 3,3 V   SDA/SCL -> I2C_SDA/I2C_SCL   X -> LCD3 / LCD2 / LCD1\r\n"
             "  1 = UN sensor (X puede quedar sin conectar)\r\n"
             "  3 = TRES sensores con XSHUT (direcciones 0x30/0x31/0x32)\r\n> ");
    int c;
@@ -121,10 +121,18 @@ void testTof(void)
       imprimir("%d de 3 listos\r\n", ok);
    }
 
+#if TOF_INT_EN_PCB
    imprimir("\r\nModo de lectura:\r\n"
             "  p = polling (pregunta por I2C)\r\n"
-            "  i = interrupcion (pin G de ToF1/2/3 -> LCD3 / LCD4 / LCDRS)\r\n> ");
+            "  i = interrupcion (pin G de ToF1/2/3)\r\n> ");
    do { c = teclaEsperar(); } while (c != 'p' && c != 'i' && !pedidoSalir(c));
+#else
+   /* En la PCB los pines G de los VL53L0X no estan conectados: solo polling */
+   imprimir("\r\nLectura por polling (en la placa los pines G no estan conectados).\r\n"
+            "Cualquier tecla = empezar, 'q' = volver\r\n> ");
+   c = teclaEsperar();
+   if (!pedidoSalir(c)) c = 'p';
+#endif
    if (pedidoSalir(c)) {
       for (uint8_t i = 0; i < n; i++) if (tof[i].ok) vl53l0xDetener(&tof[i]);
       return;
@@ -184,7 +192,7 @@ void testTof(void)
 void testBateria(void)
 {
    imprimir("\r\n--- BATERIAS (ADC) ---\r\n"
-            "CH1 = pack motores, CH2 = pack electronica (divisor 100k/33k en cada uno).\r\n"
+            "CH2 = pack motores, CH1 = pack electronica (divisor 100k/33k en cada uno).\r\n"
             "Sin baterias: potenciometro entre 3,3 V y GND, cursor a CH1 o CH2.\r\n"
             "NUNCA mas de 3,3 V en CH1 ni CH2. 'q' = volver\r\n\r\n");
    bateriaInit();
@@ -195,7 +203,7 @@ void testBateria(void)
       if (pedidoSalir(teclaLeer())) break;
       if (delayRead(&t)) {
          static const adcMap_t canales[2] = { PIN_BAT_MOTORES, PIN_BAT_ELECTRONICA };
-         static const char *nombres[2] = { "motores    CH1", "electronica CH2" };
+         static const char *nombres[2] = { "motores    CH2", "electronica CH1" };
          for (int i = 0; i < 2; i++) {
             uint32_t pin = bateriaPinMilivoltsCanal(canales[i]), bat = bateriaMilivoltsCanal(canales[i]);
             imprimir("%s: ADC %4u  pin %lu.%03lu V  pack %lu.%02lu V%s   ", nombres[i],

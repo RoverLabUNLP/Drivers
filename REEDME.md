@@ -6,14 +6,14 @@ de pruebas con menú para probar cada periférico por separado. Probado en la pl
 | Periférico | Pines EDU-CIAA (conector) | Estado |
 |---|---|---|
 | Encoder LM393 izq / der | GPIO7 (CON2_38) / GPIO8 (CON2_40) | OK, 20 pulsos por vuelta |
-| ADC (batería) | CH1 | OK con 0 V y 3,3 V; falta probar con el divisor |
+| ADC (baterías) | CH2 pack motores (CON1_11), CH1 pack electrónica (CON1_13) | OK con 0 V y 3,3 V; falta probar con el divisor |
 | UART con la ESP32-CAM | RS232_TXD → IO13, RS232_RXD ← IO14 | OK con la ESP32 real: driver `enlace_esp` probado (prueba 9, 02/11/2026), motores desde la web y telemetría |
-| HC-SR04 | TRIG LCD1 (CON2_30), ECHO LCD2 (CON2_28) por divisor 1k/2k | OK |
-| 3 × VL53L0X | I2C_SDA / I2C_SCL, XSHUT GPIO4/5/6 (CON2_33/36/35), G → LCD3 / LCD4 / LCDRS (CON2_26/22/24) | OK, máx. 1300 mm, ~20 mediciones/s por polling o por interrupción |
-| IMU MPU6050 (GY-521) | I2C_SDA / I2C_SCL (0x68), INT → LCDEN (CON2_23) | OK, 100 muestras/s por polling o por interrupción; giro y acelerómetro calibrados |
-| Motores L298N | ENA T_FIL1 (CON1_36), ENB T_FIL3 (CON1_35), IN1–IN4 GPIO0–3 (CON2_29/32/31/34) | OK, 1 motor por lado |
+| HC-SR04 | TRIG GPIO3 (CON2_34), ECHO GPIO5 (CON2_36) por divisor 1k/2k | OK (con los pines viejos) |
+| 3 × VL53L0X | I2C_SDA / I2C_SCL (CON1_19 / 21), XSHUT LCD3 / LCD2 / LCD1 (CON2_26/28/30), G sin conectar | OK, máx. 1300 mm, ~20 mediciones/s; en la PCB solo por polling |
+| IMU MPU6050 (GY-521) | I2C_SDA / I2C_SCL (0x68), INT → GPIO1 (CON2_32) | OK, 100 muestras/s por polling o por interrupción; giro y acelerómetro calibrados |
+| Motores L298N | ENA T_FIL1 (CON1_36), ENB T_COL1 (CON1_31), IN1 T_COL0 (CON1_39), IN2 T_FIL2 (CON1_37), IN3 T_FIL3 (CON1_35), IN4 T_FIL0 (CON1_33) | OK, 1 motor por lado (con los pines viejos) |
 
-Todos los pines están en `inc/pines.h` (esquemático Rev A, hoja 2). El I2C corre a 400 kHz (`I2C_VELOCIDAD`); si con cables largos aparecen errores, bajarlo a 100000.
+Todos los pines están en `inc/pines.h` (PCB de 90 mm v2, 09/11/2026: pines reasignados para que la placa casi no tenga puentes; la versión anterior era la del esquemático Rev A). Los ToF y el HC-SR04, motores, baterías e IMU cambiaron de pin: repetir las pruebas 2, 3, 4, 5 y 7 con la placa. El I2C corre a 400 kHz (`I2C_VELOCIDAD`); si con cables largos aparecen errores, bajarlo a 100000.
 
 ## Contenido
 
@@ -23,11 +23,20 @@ inc/                      headers de los drivers y de las pruebas
 src/                      drivers + main.c (menú) + test_sensores.c + test_actuadores.c + test_imu.c
                           + test_integral.c + test_enlace.c
 test_uart_esp32cam/       sketch de eco para la ESP32-CAM (prueba 6)
+auto_remoto/main.c        programa del auto (sin menú): manejo desde la web + telemetría
 ```
 
 Drivers (se copian tal cual al firmware final, no dependen de los tests ni de FreeRTOS):
 `motores`, `encoders`, `hcsr04`, `vl53l0x`, `mpu6050`, `bateria`, `enlace_esp`, `gpio_irq`, `tiempo`.
 Pruebas: `main.c`, `consola`, `test_sensores.c`, `test_actuadores.c`, `test_imu.c`, `test_integral.c`, `test_enlace.c`.
+
+## Programa del auto (`auto_remoto/`)
+
+`auto_remoto/main.c` es el programa del auto, sin el menú de pruebas: arranca solo al darle energía, los
+motores los maneja la web por `$TWIST` (si pasan 500 ms sin comandos, para) y cada 100 ms manda `$SENS`,
+`$ODOM` e `$IMU` a la ESP32-CAM. Para compilarlo: proyecto nuevo desde el template, copiar `config.mk`, `inc/`
+y los drivers de `src/` (todo menos `main.c`, `test_*.c` y `tests.h`) y este `main.c`. Al arrancar calibra el
+giroscopio: dejar el auto quieto unos 2 s.
 
 ## Cómo compilar y cargar (Embedded IDE, CIAA Software 1.1)
 
@@ -46,12 +55,14 @@ define `GPIO0/1/2_IRQHandler` y el enlazado falla con "multiple definition".
 
 Abrir el COM de la placa a **115200 8N1** (PuTTY recomendado: manda cada tecla al tocarla).
 LED verde = menú, LED3 = prueba corriendo, `q` = volver al menú.
+Al arrancar espera 3 s una tecla (LED azul): si no llega ninguna, entra directo a la prueba 8 con los motores
+manejados desde la web (sirve para usarlo con las pilas, sin la compu).
 
 | Tecla | Prueba |
 |---|---|
 | 1 | Encoders LM393 (`r` pone las cuentas a cero) |
 | 2 | HC-SR04 |
-| 3 | VL53L0X (después `1` = un sensor, `3` = tres con XSHUT; y `p` = polling, `i` = interrupción) |
+| 3 | VL53L0X (después `1` = un sensor, `3` = tres con XSHUT; y solo polling: en la PCB los pines G no están conectados) |
 | 4 | Motores L298N |
 | 5 | Batería por ADC |
 | 6 | UART con la ESP32-CAM |
@@ -67,26 +78,26 @@ Nada que no sea el divisor puede meter más de 3,3 V en un pin.
 
 **1 · Encoders:** VCC +3,3 V, GND, DO → GPIO7 (izq) / GPIO8 (der). Tapar la ranura: 1 pulso por tapada.
 
-**2 · HC-SR04:** VCC +5 V, GND, Trig → LCD1. Echo → 1 kΩ → punto medio → LCD2, y 2 kΩ del punto medio a GND.
-Antes de conectar LCD2, medir el punto medio con 5 V en la entrada del divisor: tiene que dar ≤ 3,3 V.
+**2 · HC-SR04:** VCC +5 V, GND, Trig → GPIO3. Echo → 1 kΩ → punto medio → GPIO5, y 2 kΩ del punto medio a GND.
+Antes de conectar GPIO5, medir el punto medio con 5 V en la entrada del divisor: tiene que dar ≤ 3,3 V.
 
 **3 · VL53L0X:** VIN +3,3 V (nunca 5 V: los pull-up del I2C del módulo van a VIN), GND, SDA → I2C_SDA, SCL → I2C_SCL,
-X → GPIO4/5/6 (con uno solo, X sin conectar). Para el modo interrupción: G → LCD3 / LCD4 / LCDRS.
+X → LCD3 / LCD2 / LCD1 (con uno solo, X sin conectar). G sin conectar (se leen por polling; `TOF_INT_EN_PCB` en `pines.h`).
 Cada segundo muestra cuántas mediciones leyó por sensor: tiene que dar ~20.
 
 **4 · Motores:** en el L298N, jumpers de ENA/ENB **sacados**, jumper de 5 V puesto, bornera +5V sin conectar.
-ENA/ENB van al pin **de afuera** de cada par (el de adentro es 5 V). IN1–IN4 → GPIO0–3.
+ENA/ENB van al pin **de afuera** de cada par (el de adentro es 5 V). IN1 → T_COL0, IN2 → T_FIL2, IN3 → T_FIL3, IN4 → T_FIL0; ENA → T_FIL1, ENB → T_COL1.
 Batería + → +12V, batería − → GND, y **GND del L298N a GND de la EDU-CIAA**.
 Motor izq en OUT1/OUT2, der en OUT3/OUT4 (con 4 motores, 2 en paralelo por lado).
 Orden: USB → terminal → `4` → recién ahí la batería. Para apagar, al revés.
 Teclas: `w` `s` `a` `d`, `1`/`2` un solo lado, `+`/`-` velocidad, espacio freno, `x` libre. Se paran solos a los 5 s.
 
-**5 · ADC:** cable en CH1, tocar GND (da 0) y +3,3 V (da 1023). En el auto: divisor 100k/33k desde la batería.
+**5 · ADC:** cable en CH2 (motores) o CH1 (electrónica), tocar GND (da 0) y +3,3 V (da 1023). En el auto: divisor 100k/33k desde la batería.
 
 **6 · UART:** puente de RS232_TXD a RS232_RXD → vuelven los `PING n`. Con la ESP32-CAM: cargarle
 `test_uart_esp32cam.ino` (RX GPIO13, TX GPIO14) → vuelven como `ESP: PING n`.
 
-**7 · IMU:** VCC +3,3 V (o +5 V), GND, SDA → I2C_SDA, SCL → I2C_SCL, AD0 a GND o suelto (0x68), INT → LCDEN
+**7 · IMU:** VCC +3,3 V (o +5 V), GND, SDA → I2C_SDA, SCL → I2C_SCL, AD0 a GND o suelto (0x68), INT → GPIO1
 (modo interrupción). XDA y XCL sin conectar. Al entrar calibra el giroscopio: no moverla esos 2 s (si se mueve,
 avisa y reintenta). Quieta y plana: Z ≈ +1000 mg, |a| ≈ 1000 mg, giro ≈ 0 °/s. En modo `i`, con `v` (datos ocultos):
 100 muestras/s, dt ≈ 9,9 ms, perdidas 0. La calibración del acelerómetro de nuestro GY-521 está cargada en
@@ -134,5 +145,5 @@ Para FreeRTOS:
 - [x] Probar `enlace_esp` con la ESP32-CAM (prueba 9)
 - [ ] Arranque automático sin USB (con solo las pilas se queda en el menú)
 - [ ] Acordar unidades de `$TWIST` (supuesto −1..1), campos de `$IMU` y checksum
-- [ ] Batería real por ADC con el divisor 100k/33k (uno por pack: CH1 motores, CH2 electrónica; sumar el canal al driver `bateria`)
+- [ ] Batería real por ADC con el divisor 100k/33k (uno por pack: CH2 motores, CH1 electrónica)
 - [ ] Fusión para el rumbo: Kalman 1D o filtro complementario con el giro Z + los encoders

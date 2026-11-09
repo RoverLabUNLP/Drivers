@@ -17,7 +17,7 @@ void testMotores(void)
    const char *estado = "libre";
 
    imprimir("\r\n--- MOTORES (L298N) ---\r\n"
-            "ENA -> T_FIL1  ENB -> T_FIL3  IN1..IN4 -> GPIO0..GPIO3  (sacar jumpers ENA/ENB)\r\n"
+            "ENA -> T_FIL1  ENB -> T_COL1  IN1 T_COL0  IN2 T_FIL2  IN3 T_FIL3  IN4 T_FIL0  (sacar jumpers ENA/ENB)\r\n"
             "Motores con la BATERIA en VS del L298N, GND comun con la EDU-CIAA.\r\n"
             "  w adelante   s atras   a gira izq   d gira der\r\n"
             "  1 solo izq   2 solo der   + / - velocidad (de a 10%%)\r\n"

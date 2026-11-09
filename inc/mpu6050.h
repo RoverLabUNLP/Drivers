@@ -9,7 +9,7 @@
  *  - filtro pasabajos digital (DLPF) de ~44 Hz
  *  - una muestra nueva cada 10 ms (100 Hz)
  *  - aviso de "dato listo" en el registro INT_STATUS y en el pin INT
- *    (el pin es opcional: MPU_INT -> LCD_EN en el esquematico)
+ *    (el pin es opcional: MPU_INT -> GPIO1 en la PCB)
  *
  * Lectura no bloqueante: mpu6050Leer() devuelve 1 solo cuando hay una
  * muestra nueva. Resultados en enteros, sin float:

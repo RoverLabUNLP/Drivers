@@ -1,8 +1,9 @@
 /*
  * Medicion de los dos packs 2S por el ADC, cada uno con su divisor 100k / 33k
  * (esquematico Rev B):
- *    CH1 = pack 1, motores      (BAT_MOT_ADC)
- *    CH2 = pack 2, electronica  (BAT_LOG_ADC)
+ *    CH2 = pack 1, motores      (BAT_MOT_ADC, CON1_11)
+ *    CH1 = pack 2, electronica  (BAT_LOG_ADC, CON1_13)
+ * (los canales salen de pines.h: PIN_BAT_MOTORES / PIN_BAT_ELECTRONICA)
  *   V_pin = V_bat * 33 / 133      (8,4 V -> 2,08 V en el pin)
  * ADC de 10 bits con referencia de 3,3 V.
  *
@@ -31,10 +32,10 @@ uint32_t bateriaPinMilivoltsCanal(adcMap_t canal); /* tension en el pin del ADC 
 uint32_t bateriaMilivoltsCanal(adcMap_t canal);    /* tension del pack */
 
 /* Atajos para cada pack */
-uint32_t bateriaMotoresMv(void);       /* CH1 */
-uint32_t bateriaElectronicaMv(void);   /* CH2 */
+uint32_t bateriaMotoresMv(void);       /* PIN_BAT_MOTORES (CH2) */
+uint32_t bateriaElectronicaMv(void);   /* PIN_BAT_ELECTRONICA (CH1) */
 
-/* Compatibilidad con la version de un solo canal: leen CH1 (pack de motores) */
+/* Compatibilidad con la version de un solo canal: leen el pack de motores */
 uint16_t bateriaCrudo(void);
 uint32_t bateriaPinMilivolts(void);
 uint32_t bateriaMilivolts(void);

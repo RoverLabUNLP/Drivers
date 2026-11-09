@@ -2,7 +2,7 @@
  * Prueba 8: todo junto, con el auto armado y las alimentaciones reales.
  *
  * Los motores se manejan con el teclado (como en la prueba 4) y mientras tanto
- * se leen TODOS los sensores a la vez, con interrupciones, como en el firmware
+ * se leen TODOS los sensores a la vez (IMU por interrupcion, ToF por polling), como en el firmware
  * final. Una vez por segundo se muestra un resumen.
  *
  * Que buscar (lo que las pruebas individuales no muestran):
@@ -10,6 +10,9 @@
  *    VL53L0X o IMU que dejan de responder (I2C colgado) al arrancar los motores
  *  - caidas de tension: la bateria de electronica no tendria que moverse cuando
  *    arrancan los motores; si la ESP32 o la EDU-CIAA se reinician, falta corriente
+ *  - control desde la web: cada $TWIST que llega por la UART mueve los motores
+ *    (izq = v - w, der = v + w, escalado a la velocidad '+'/'-'); si pasan 500 ms
+ *    sin $TWIST, para. La telemetria ($SENS, $ODOM, $IMU) sale cada 100 ms.
  *  - el lazo principal: "lazo max" es la vuelta mas lenta del ultimo segundo;
  *    si pasa de ~10 ms, algo esta bloqueando y se pierden muestras de la IMU
  *
@@ -36,13 +39,16 @@
 
 #define AUTOPARADA_MS   5000
 #define PERIODO_HC_MS   100
+#define WATCHDOG_WEB_MS 500
 
 static const gpioMap_t xshutsI[3]   = { PIN_XSHUT1, PIN_XSHUT2, PIN_XSHUT3 };
 static const uint8_t   dirsI[3]     = { 0x30, 0x31, 0x32 };
+#if TOF_INT_EN_PCB
 static const gpioMap_t intsI[3]     = { PIN_TOF1_INT, PIN_TOF2_INT, PIN_TOF3_INT };
 static const uint8_t   puertosI[3]  = { TOF1_INT_PUERTO, TOF2_INT_PUERTO, TOF3_INT_PUERTO };
 static const uint8_t   bitsI[3]     = { TOF1_INT_BIT, TOF2_INT_BIT, TOF3_INT_BIT };
 static const uint8_t   canalesI[3]  = { IRQ_CANAL_TOF1, IRQ_CANAL_TOF2, IRQ_CANAL_TOF3 };
+#endif
 
 /* Valor con signo en milesimas -> "-12.3" (1 decimal) */
 static void fmtX1000(char *b, int32_t v)
@@ -66,6 +72,7 @@ void testIntegral(void)
    uint8_t imuOk;
    int16_t vel = 50;
    const char *estado = "libre";
+   uint8_t porWeb = 0;            /* 1 = los motores los esta manejando la web */
 
    imprimir("\r\n--- 8 · TODO JUNTO (auto armado, alimentaciones reales) ---\r\n"
             "Teclas de motores: w s a d | 1 2 un lado | + - velocidad | espacio freno | x libre\r\n"
@@ -84,7 +91,9 @@ void testIntegral(void)
    for (int i = 0; i < 3; i++) {
       imprimir("  VL53L0X %d (0x%02X): %s\r\n", i + 1, dirsI[i], tof[i].ok ? "OK" : "NO RESPONDE");
       if (!tof[i].ok) continue;
+#if TOF_INT_EN_PCB
       vl53l0xHabilitarIrq(&tof[i], intsI[i], puertosI[i], bitsI[i], canalesI[i]);
+#endif
       vl53l0xContinuo(&tof[i], 50);
    }
 
@@ -122,7 +131,7 @@ void testIntegral(void)
       /* ---- teclado / motores ---- */
       int c = teclaLeer();
       if (pedidoSalir(c)) break;
-      if (c >= 0) delayConfig(&tAuto, AUTOPARADA_MS);
+      if (c >= 0) { delayConfig(&tAuto, AUTOPARADA_MS); porWeb = 0; }
       switch (c) {
       case 'w': motorVelocidad(MOTOR_IZQ,  vel); motorVelocidad(MOTOR_DER,  vel); estado = "adelante"; break;
       case 's': motorVelocidad(MOTOR_IZQ, -vel); motorVelocidad(MOTOR_DER, -vel); estado = "atras";    break;
@@ -160,7 +169,29 @@ void testIntegral(void)
 
       /* ---- enlace con la ESP32 ---- */
       enlaceProcesar();
-      enlaceTwistNuevo(&tw);
+      if (enlaceTwistNuevo(&tw)) {
+         /* Comando de la web: v y w entre -1 y 1 (milesimas), escalados a 'vel' */
+         int32_t izq = (tw.v - tw.w) * vel / 1000;
+         int32_t der = (tw.v + tw.w) * vel / 1000;
+         if (izq > 100) izq = 100;
+         if (izq < -100) izq = -100;
+         if (der > 100) der = 100;
+         if (der < -100) der = -100;
+         if (izq == 0 && der == 0) { motoresParar(); estado = "web stop"; }
+         else {
+            motorVelocidad(MOTOR_IZQ, (int16_t)izq);
+            motorVelocidad(MOTOR_DER, (int16_t)der);
+            estado = "web";
+         }
+         porWeb = 1;
+         delayConfig(&tAuto, AUTOPARADA_MS);
+      }
+      /* Seguridad: si la web deja de mandar $TWIST, parar */
+      if (porWeb && enlaceTwistVencido(WATCHDOG_WEB_MS)) {
+         motoresParar();
+         porWeb = 0;
+         estado = "sin web";
+      }
       if (delayRead(&tTele)) {
          uint32_t cerca = 0xFFFFFFFFu;
          for (int i = 0; i < 3; i++)

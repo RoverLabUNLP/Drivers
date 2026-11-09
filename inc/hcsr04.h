@@ -9,7 +9,7 @@
  * distancia [mm] = ancho [us] * 343 m/s / 2  ~= ancho / 5.83
  * Entre disparos dejar >= 60 ms (lo pide el datasheet para que se apaguen los ecos).
  *
- * ECHO sale a 5 V: SIEMPRE por el divisor 1k / 2k antes de LCD2.
+ * ECHO sale a 5 V: SIEMPRE por el divisor 1k / 2k antes de PIN_ECHO (GPIO5).
  */
 #ifndef HCSR04_H
 #define HCSR04_H
